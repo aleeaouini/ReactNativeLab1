@@ -1,35 +1,12 @@
 // App.js
 import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createStackNavigator } from "@react-navigation/stack";
-import HomeScreen from "./screens/HomeScreen";
-import NotesScreen from "./screens/NotesScreen";
-
-const Stack = createStackNavigator();
+import { AuthProvider } from "./src/contexts/AuthContext";
+import AuthNavigator from "./src/Navigation/AuthNavigator"; 
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Home">
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{
-            title: "Notes App",
-            headerStyle: {
-              backgroundColor: "#f4511e",
-            },
-            headerTintColor: "#fff",
-          }}
-        />
-        <Stack.Screen
-          name="Notes"
-          component={NotesScreen}
-          options={{
-            title: "My Notes",
-          }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <AuthProvider>
+      <AuthNavigator />
+    </AuthProvider>
   );
 }

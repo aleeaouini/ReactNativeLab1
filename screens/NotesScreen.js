@@ -1,167 +1,209 @@
-import React, { useState } from "react";
+// src/screens/NotesScreen.js
+import React, { useEffect, useState, useContext } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
+  StyleSheet,
+  ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
-import NoteItem from "./components/NoteItem";
-import NoteInput from "./components/NoteInput";
+import {
+  getNotes,
+  addNote,
+  deleteNote,
+  updateNote,
+} from "../services/noteService";
+import NoteItem from "../components/NoteItem";
+import AddNoteModal from "../components/AddNoteModal";
+import { AuthContext } from "../context/AuthContext";
 
-// Sample initial notes data
-const initialNotes = [
-  {
-    id: "1",
-    content: "Learn React Native",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    content: "Complete the tutorial",
-    createdAt: new Date().toISOString(),
-  },
-];
+const NotesScreen = () => {
+  const [notes, setNotes] = useState([]);
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-export default function NotesScreen() {
-  const [notes, setNotes] = useState(initialNotes);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [noteText, setNoteText] = useState("");
-  const [editingNote, setEditingNote] = useState(null);
+  const { user } = useContext(AuthContext); // current user from AuthContext
 
-  // Function to add or update a note
-  const saveNote = () => {
-    if (noteText.trim() === "") return;
 
-    if (editingNote) {
-      // Update existing note
-      setNotes(
-        notes.map((note) =>
-          note.id === editingNote.id
-            ? {
-                ...note,
-                content: noteText,
-                updatedAt: new Date().toISOString(),
-              }
-            : note
-        )
-      );
-      setEditingNote(null);
-    } else {
-      // Add new note
-      const newNote = {
-        id: Date.now().toString(),
-        content: noteText,
-        createdAt: new Date().toISOString(),
-      };
-      setNotes([newNote, ...notes]);
-    }
 
-    setNoteText("");
-    setModalVisible(false);
-  };
-
-  // Function to delete a note
-  const deleteNote = (id) => {
-    setNotes(notes.filter((note) => note.id !== id));
-  };
-
-  // Function to open edit mode
-  const editNote = (note) => {
-    setEditingNote(note);
-    setNoteText(note.content);
-    setModalVisible(true);
-  };
-
-  // Function to close the modal
-  const closeModal = () => {
-    setModalVisible(false);
-    setNoteText("");
-    setEditingNote(null);
-  };
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Notes</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
+  const renderEmptyComponent = () => {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>You don't have any notes yet.</Text>
+        <Text style={styles.emptySubtext}>
+          Tap the + button to create your first note!
+        </Text>
       </View>
+    );
+  };
 
-      {notes.length > 0 ? (
-        <FlatList
-          data={notes}
-          renderItem={({ item }) => (
-            <NoteItem note={item} onEdit={editNote} onDelete={deleteNote} />
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.notesList}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No notes yet. Create one!</Text>
+
+  // Fetch notes belonging to the current user
+  const fetchNotes = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const fetchedNotes = await getNotes(user.$id);
+      setNotes(fetchedNotes);
+    } catch (err) {
+      console.error("Failed to fetch notes:", err);
+      setError("Failed to fetch notes. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Run when user changes (on login)
+  useEffect(() => {
+    if (user) fetchNotes();
+  }, [user]);
+
+  // Add note
+  const handleAddNote = async (text) => {
+    try {
+      const newNote = await addNote(text, user.$id);
+      setNotes((prev) => [newNote, ...prev]);
+      setIsAddModalVisible(false);
+    } catch (err) {
+      console.error("Failed to add note:", err);
+    }
+  };
+
+  // Delete note
+  const handleDeleteNote = async (noteId) => {
+    try {
+      await deleteNote(noteId);
+      setNotes((prev) => prev.filter((note) => note.$id !== noteId));
+    } catch (err) {
+      console.error("Failed to delete note:", err);
+    }
+  };
+
+  // Update note
+  const handleUpdateNote = async (noteId, newText) => {
+    try {
+      const updatedNote = await updateNote(noteId, newText);
+      setNotes((prev) =>
+        prev.map((note) => (note.$id === noteId ? updatedNote : note))
+      );
+    } catch (err) {
+      console.error("Failed to update note:", err);
+    }
+  };
+
+  // If still loading
+  if (isLoading && notes.length === 0) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#2196F3" />
+      </View>
+    );
+  }
+
+  // If error
+  if (error && notes.length === 0) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
+  
+
+
+  
+
+   return (
+    <View style={styles.container}>
+      <FlatList
+        data={notes}
+        renderItem={({ item }) => (
+          <NoteItem
+            note={item}
+            onDelete={handleDeleteNote}
+            onUpdate={handleUpdateNote}
+          />
+        )}
+        keyExtractor={(item) => item.$id}
+        contentContainerStyle={notes.length === 0 ? { flex: 1 } : {}}
+        ListEmptyComponent={!isLoading && renderEmptyComponent()}
+      />
+
+      {/* Add button and modal remain the same */}
+
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0000ff" />
         </View>
       )}
-
-      <NoteInput
-        visible={modalVisible}
-        onClose={closeModal}
-        onSave={saveNote}
-        noteText={noteText}
-        setNoteText={setNoteText}
-        isEditing={!!editingNote}
-      />
     </View>
   );
-}
+};
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
     backgroundColor: "#f5f5f5",
   },
   header: {
-    height: 100,
-    backgroundColor: "#3498db",
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
-    paddingBottom: 15,
-    paddingHorizontal: 20,
+    alignItems: "center",
+    marginBottom: 16,
   },
-  headerTitle: {
-    color: "white",
+  title: {
     fontSize: 24,
     fontWeight: "bold",
+    color: "#333",
   },
   addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "white",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "#2196F3",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
   },
   addButtonText: {
-    fontSize: 24,
-    color: "#3498db",
+    color: "white",
     fontWeight: "bold",
-    marginTop: -2,
   },
-  notesList: {
-    padding: 15,
+  listContent: {
+    paddingBottom: 20,
   },
-  emptyContainer: {
+  centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  errorText: {
+    color: "red",
+    fontSize: 16,
+    textAlign: "center",
+  },
+   emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
   emptyText: {
     fontSize: 18,
-    color: "#7f8c8d",
+    fontWeight: "bold",
+    marginBottom: 10,
   },
+  emptySubtext: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
+
+
+
+
 });
+
+export default NotesScreen;
